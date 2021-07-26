@@ -10,8 +10,10 @@ import model
 import matplotlib.pyplot as plt
 
 # select color or gray-scale
-# color = 'gray'
-color = 'color'
+from ddr import TDV
+
+color = 'gray'
+# color = 'color'
 
 # define the noise level
 sigma = 25
@@ -27,10 +29,33 @@ z = y + sigma/255. * np.random.randn(*y.shape).astype(np.float32)
 checkpoint = torch.load(os.path.join('checkpoints', f'tdv3-3-25-f32-{color}.pth'))
 sigma_ref = 25
 
+# ---------------- SETTING MY OWN PARAMETERS HERE TO USE TVL2/L1Regularizer
+# checkpoint['config']['T_mode'] = 'fixed'
+# checkpoint['config']['lambda']['init'] = 0.01
+
+# checkpoint['config']['D']['config']['use_prox'] = False
+# checkpoint['config']['D']['config']['use_prox'] = True
+
+# checkpoint['config']['D']['type'] = 'denoise_l1'
+checkpoint['config']['D']['type'] = 'denoise_l2'
+
+checkpoint['config']['R']['type'] = 'tdv'
+# checkpoint['config']['R']['type'] = 'l1'
+# checkpoint['config']['R']['type'] = 'l2'
+
 # get the variational network with the TDV regularizer
 vn = model.VNet(checkpoint['config'], efficient=False)
-vn.load_state_dict(checkpoint['model'])
+
+if checkpoint['config']['R']['type'] == 'tdv':
+    vn.load_state_dict(checkpoint['model'])
+
+
+# vn.T = torch.Tensor([3])
+# vn.S = 1000
+
 vn.cuda()
+# -------------------------------------------------------------------------
+
 
 # define the evaluation metric
 def psnr(x, y): 

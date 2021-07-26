@@ -1,9 +1,12 @@
+from abc import ABC
+
 import torch
 import torch.utils.checkpoint as cp
 
 import numpy as np
 
 from ddr import TDV
+from ddr.TVRegularizer import TVL2Regularizer, TVL1Regularizer
 
 
 class Dataterm(torch.nn.Module):
@@ -27,7 +30,7 @@ class Dataterm(torch.nn.Module):
         raise NotImplementedError
 
 
-class L2DenoiseDataterm(Dataterm):
+class L2DenoiseDataterm(Dataterm, ABC):
     def __init__(self, config):
         super(L2DenoiseDataterm, self).__init__(config)
 
@@ -39,6 +42,27 @@ class L2DenoiseDataterm(Dataterm):
 
     def grad(self, x, z):
         return x-z
+
+    def __repr__(self):
+        return "l2 denoise dataterm"
+
+
+class L1DenoiseDataterm(Dataterm, ABC):
+    def __init__(self, config):
+        super(L1DenoiseDataterm, self).__init__(config)
+
+    def energy(self, x, z):
+        return (x-z).abs()
+
+    def prox(self, x, z, tau):
+        delta = x-z
+        return z + torch.clamp_min( delta.abs() - tau ,0) * torch.sign(delta)
+
+    def grad(self, x, z):
+        return x-z
+
+    def __repr__(self):
+        return "l1 denoise dataterm"
 
 
 class VNet(torch.nn.Module):
@@ -75,13 +99,17 @@ class VNet(torch.nn.Module):
         # setup the regularization
         R_types = {
             'tdv': TDV,
+            'l2': TVL2Regularizer,
+            'l1': TVL1Regularizer
         }
         self.R = R_types[config['R']['type']](config['R']['config'])
+
 
         # setup the dataterm
         self.use_prox = config['D']['config']['use_prox']
         D_types = {
-            'denoise': L2DenoiseDataterm,
+            'denoise_l2': L2DenoiseDataterm,
+            'denoise_l1': L1DenoiseDataterm,
         }
         self.D = D_types[config['D']['type']](config['D']['config'])
 
